@@ -122,4 +122,13 @@ public class GitScm extends Scm {
             clickLink("Advanced sub-modules behaviours");
         }
     }
+
+    public static class PruneStaleBranch extends Behaviour {
+        private final Control name = control("PruneStaleBranch");
+
+        public PruneStaleBranch(GitScm git, String path) {
+            super(git, path);
+            clickLink("Prune stale remote-tracking branches");
+        }
+    }
 }
