@@ -31,9 +31,10 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     private Repository repository;
     private Git git;
 
-    private String readmeFileContents_fromDevBranch;
-
     public void createValidRepository() throws IOException, GitAPIException {
+        if (GIT_PARENT_DIR.exists())
+            FileUtils.deleteDirectory(GIT_PARENT_DIR);
+
         final String FEATURE_BRANCH_NAME = "ready/feature_1";
 
         FileRepositoryBuilder builder = new FileRepositoryBuilder();
@@ -85,12 +86,10 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
 
         git.checkout().setName("master").call();
 
-        readmeFileContents_fromDevBranch = FileUtils.readFileToString(new File(README_FILE_PATH));
-    }
-
-    private void cleanUp() throws IOException {
         repository.close();
-        FileUtils.deleteDirectory(GIT_PARENT_DIR);
+
+        if (GIT_PARENT_DIR.exists())
+            FileUtils.deleteDirectory(GIT_PARENT_DIR);
     }
 
     @Test
@@ -103,10 +102,41 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
         job.find(By.id("radio-block-5")).click();
         job.find(By.name("_.branch")).sendKeys("master");
         job.choose("Squashed commit");
+
+        job.save();
     }
 
     @Test
     public void merge_from_feature_branch_to_integration_branch_using_squash_commit_strategy() throws IOException, GitAPIException {
+        createValidRepository();
+        FreeStyleJob job = jenkins.jobs.create();
+
+        job.configure();
+
+        GitScm gitScm = job.useScm(GitScm.class);
+        gitScm.url("file://" + GIT_DIR.getAbsolutePath());
+        gitScm.branch.set("origin/ready/**");
+        gitScm.addBehaviour(GitScm.PruneStaleBranch.class);
+        gitScm.addBehaviour(GitScm.CleanAfterCheckout.class);
+
+        job.check("Use pretested integration");
+        job.find(By.id("radio-block-5")).click();
+        job.find(By.name("_.branch")).sendKeys("master");
+        job.choose("Squashed commit");
+
+        job.clickButton("Add post-build action");
+        job.clickLink("Pretested Integration post-build");
+
+        job.save();
+
+        Build build = job.scheduleBuild();
+
+        build.waitUntilFinished();
+        TestCase.assertTrue(build.isSuccess());
+    }
+
+    @Test
+    public void merge_from_feature_branch_to_integration_branch_using_accumulated_commit_strategy() throws IOException, GitAPIException {
         createValidRepository();
 
         FreeStyleJob job = jenkins.jobs.create();
@@ -117,12 +147,15 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
         gitScm.url("file://" + GIT_DIR.getAbsolutePath());
         gitScm.branch.set("origin/ready/**");
         gitScm.addBehaviour(GitScm.PruneStaleBranch.class);
-        // todo add the other behavior
+        gitScm.addBehaviour(GitScm.CleanAfterCheckout.class);
 
         job.check("Use pretested integration");
         job.find(By.id("radio-block-5")).click();
         job.find(By.name("_.branch")).sendKeys("master");
-        job.choose("Squashed commit");
+        job.choose("Accumulated commit");
+
+        job.clickButton("Add post-build action");
+        job.clickLink("Pretested Integration post-build");
 
         job.save();
 
@@ -130,7 +163,5 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
 
         build.waitUntilFinished();
         TestCase.assertTrue(build.isSuccess());
-
-        cleanUp();
     }
 }

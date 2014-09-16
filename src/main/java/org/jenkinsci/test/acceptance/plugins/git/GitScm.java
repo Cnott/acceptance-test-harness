@@ -124,11 +124,18 @@ public class GitScm extends Scm {
     }
 
     public static class PruneStaleBranch extends Behaviour {
-        private final Control name = control("PruneStaleBranch");
 
         public PruneStaleBranch(GitScm git, String path) {
             super(git, path);
             clickLink("Prune stale remote-tracking branches");
+        }
+    }
+
+    public static class CleanAfterCheckout extends Behaviour {
+
+        public CleanAfterCheckout(GitScm git, String path) {
+            super(git, path);
+            clickLink("Clean after checkout");
         }
     }
 }
