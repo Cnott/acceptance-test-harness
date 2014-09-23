@@ -31,6 +31,14 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     private Repository repository;
     private Git git;
 
+    @org.junit.After
+    public void tearDown() throws Exception {
+        repository.close();
+
+        if (GIT_PARENT_DIR.exists())
+            FileUtils.deleteDirectory(GIT_PARENT_DIR);
+    }
+
     public void createValidRepository() throws IOException, GitAPIException {
         if (GIT_PARENT_DIR.exists())
             FileUtils.deleteDirectory(GIT_PARENT_DIR);
@@ -85,11 +93,6 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
         commitCommand.call();
 
         git.checkout().setName("master").call();
-
-        repository.close();
-
-        if (GIT_PARENT_DIR.exists())
-            FileUtils.deleteDirectory(GIT_PARENT_DIR);
     }
 
     @Test
@@ -132,6 +135,7 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
         Build build = job.scheduleBuild();
 
         build.waitUntilFinished();
+
         TestCase.assertTrue(build.isSuccess());
     }
 
