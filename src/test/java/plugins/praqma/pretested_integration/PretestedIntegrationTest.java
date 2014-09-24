@@ -33,10 +33,12 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
 
     @org.junit.After
     public void tearDown() throws Exception {
-        repository.close();
+        if (repository != null) {
+            repository.close();
 
-        if (GIT_PARENT_DIR.exists())
-            FileUtils.deleteDirectory(GIT_PARENT_DIR);
+            if (GIT_PARENT_DIR.exists())
+                FileUtils.deleteDirectory(GIT_PARENT_DIR);
+        }
     }
 
     public void createValidRepository() throws IOException, GitAPIException {
