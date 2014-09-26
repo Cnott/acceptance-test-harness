@@ -120,13 +120,13 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     }
 
     @Test
-    public void allow_user_to_use_Pretested_Integration_plugin_in_freestyle_project() {
+    public void allowUserToUsePretestedIntegrationPluginInFreestyleProject() {
         FreeStyleJob job = jenkins.jobs.create();
 
         job.configure();
 
         job.check("Use pretested integration");
-        job.find(By.id("radio-block-5")).click();
+        job.find(By.id("radio-block-6")).click();
         job.find(By.name("_.branch")).sendKeys("master");
         job.choose("Squashed commit");
 
@@ -134,7 +134,7 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     }
 
     @Test
-    public void merge_from_feature_branch_to_integration_branch_using_squash_commit_strategy() throws IOException, GitAPIException {
+    public void oneValidFeatureBranchUsingSquashedMergeStrategy_1buildTriggeredBranchGetsIntegratedBuildMarkedSuccessful() throws Exception {
         File gitDir = new File("test-repo/.git");
         Repository repository = createValidRepository(gitDir);
         FreeStyleJob job = jenkins.jobs.create();
@@ -167,7 +167,7 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     }
 
     @Test
-    public void merge_from_feature_branch_to_integration_branch_using_accumulated_commit_strategy() throws IOException, GitAPIException {
+    public void oneValidFeatureBranchUsingAccumulatedMergeStrategy_1buildTriggeredBranchGetsIntegratedBuildMarkedSuccessful() throws Exception {
         File gitDir = new File("test-repo/.git");
         Repository repository = createValidRepository(gitDir);
 
