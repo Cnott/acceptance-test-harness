@@ -356,7 +356,7 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
     }
 
     @Test
-    public void multiScmWith1SvnRepository_BuildMarkedFailed() throws Exception {
+    public void multiScmWith1SvnRepository_UserIsInformedBuildMarkedSuccessful() throws Exception {
         File gitDir = new File("test-repo/.git");
         Repository repository = createValidRepository(gitDir);
         FreeStyleJob job = jenkins.jobs.create();
@@ -381,7 +381,8 @@ public class PretestedIntegrationTest extends AbstractJUnitTest {
 
         build.waitUntilFinished();
 
-        TestCase.assertTrue(!build.isSuccess());
+        TestCase.assertTrue(build.isSuccess());
+        TestCase.assertTrue(build.getConsole().contains("Skipping the workspace preparation for pre tested integration"));
 
         cleanUp(repository);
     }
