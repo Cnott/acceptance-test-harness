@@ -1,6 +1,6 @@
 package org.jenkinsci.test.acceptance.plugins.tasks;
 
-import org.jenkinsci.test.acceptance.plugins.analysis_core.AbstractCodeStylePluginBuildSettings;
+import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisSettings;
 import org.jenkinsci.test.acceptance.po.Control;
 import org.jenkinsci.test.acceptance.po.Job;
 
@@ -9,7 +9,7 @@ import org.jenkinsci.test.acceptance.po.Job;
  *
  * It provides access to the particular controls to configure the post build step.
  * This class derives conrtols common to all static analyser plugins from
- * {@link org.jenkinsci.test.acceptance.plugins.analysis_core.AbstractCodeStylePluginBuildSettings}
+ * {@link org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisSettings}
  * and adds task scanner specific controls.
  *
  * This post build step requires installation of the tasks plugin.
@@ -17,7 +17,7 @@ import org.jenkinsci.test.acceptance.po.Job;
  * @author Martin Ende
  */
 
-public abstract class AbstractTaskScannerBuildSettings extends AbstractCodeStylePluginBuildSettings {
+public abstract class AbstractTaskScannerBuildSettings extends AnalysisSettings {
 
     protected Control pattern = control("pattern");
     protected Control excludePattern = control("excludePattern");
@@ -26,6 +26,7 @@ public abstract class AbstractTaskScannerBuildSettings extends AbstractCodeStyle
     protected Control normalPriorityTags = control("normal");
     protected Control lowPriorityTags = control("low");
     protected Control ignoreCase = control("ignoreCase");
+    protected Control asRegexp = control("asRegexp");
 
     protected Control shouldDetectModules = control("shouldDetectModules");
 
@@ -50,7 +51,7 @@ public abstract class AbstractTaskScannerBuildSettings extends AbstractCodeStyle
     }
 
     /**
-     * Sets the input for the file names to be excluded
+     * Sets the input for the file names to be excluded.
      */
     public void setExcludePattern(String pattern) {
         this.excludePattern.set(pattern);
@@ -78,10 +79,17 @@ public abstract class AbstractTaskScannerBuildSettings extends AbstractCodeStyle
     }
 
     /**
-     * Decides whether to ignore the case when searching for task tags
+     * Decides whether to ignore the case when searching for task tags.
      */
     public void setIgnoreCase(boolean ignore) {
         this.ignoreCase.check(ignore);
+    }
+
+    /**
+     * Decides whether to treat tags as regular expressions.
+     */
+    public void setAsRegexp(boolean asRegexp) {
+        this.asRegexp.check(asRegexp);
     }
 
     /**

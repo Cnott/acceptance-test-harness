@@ -10,13 +10,14 @@ import java.util.TreeMap;
 import org.jenkinsci.test.acceptance.junit.Bug;
 import org.jenkinsci.test.acceptance.junit.SmokeTest;
 import org.jenkinsci.test.acceptance.junit.WithPlugins;
-import org.jenkinsci.test.acceptance.plugins.analysis_core.AbstractCodeStylePluginBuildConfigurator;
+import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisConfigurator;
 import org.jenkinsci.test.acceptance.plugins.maven.MavenModuleSet;
 import org.jenkinsci.test.acceptance.plugins.tasks.TaskScannerAction;
 import org.jenkinsci.test.acceptance.plugins.tasks.TaskScannerFreestyleBuildSettings;
 import org.jenkinsci.test.acceptance.plugins.tasks.TaskScannerMavenBuildSettings;
 import org.jenkinsci.test.acceptance.po.Build;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
+import org.jenkinsci.test.acceptance.po.Job;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.xml.sax.SAXException;
@@ -34,10 +35,10 @@ import static org.junit.Assert.*;
   @author Martin Ende
  */
 @WithPlugins("tasks")
-public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
+public class TaskScannerPluginTest extends AbstractAnalysisTest {
 
     /**
-     * This test's objective is to verify the basic functionality of the Task
+     * This tests objective is to verify the basic functionality of the Task
      * Scanner plugin, i.e. finding different task tags, including / excluding
      * files and providing the correct results.
      * The test builds the same job twice with and without case sensitivity.
@@ -47,8 +48,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     @Category(SmokeTest.class)
     public void single_task_tags_and_exclusion_pattern() throws Exception{
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -110,7 +111,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
         // find the high priority task in Ec2Provider.java:133.
 
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setIgnoreCase(true);
@@ -145,8 +146,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     @Test
     public void xml_api_report_depth_0() throws IOException, SAXException, ParserConfigurationException {
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -169,7 +170,64 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     }
 
     /**
-     * This test's objective is to verify that the plugin correctly works for
+     * This tests objective is to verify that the plugin correctly works for
+     * tags that are treated as regular expression.
+     */
+    @Test
+    public void regular_expression() throws Exception {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
+                    @Override
+                    public void configure(TaskScannerFreestyleBuildSettings settings) {
+                        settings.setPattern("**/*.txt");
+                        settings.setNormalPriorityTags("^.*(TODO(?:[0-9]*))(.*)$");
+                        settings.setAsRegexp(true);
+                    }
+                };
+
+        FreeStyleJob job = setupJob("/tasks_plugin/regexp", FreeStyleJob.class,
+                TaskScannerFreestyleBuildSettings.class, buildConfigurator);
+
+        verifyRegularExpressionScannerResult(job);
+    }
+
+    private void verifyRegularExpressionScannerResult(final Job job) {
+        Build lastBuild = buildJobWithSuccess(job);
+        lastBuild.open();
+        TaskScannerAction tsa = new TaskScannerAction(job);
+
+        assertThat(tsa.getResultLinkByXPathText("5 open tasks"), is("tasksResult"));
+        assertThat(tsa.getResultTextByXPathText("5 open tasks"), endsWith("in 1 workspace file."));
+        assertThat(tsa.getWarningNumber(), is(5));
+        assertThat(tsa.getNormalWarningNumber(), is(5));
+    }
+
+    /**
+     * This tests objective is to verify that the plugin correctly works for
+     * tags that are treated as regular expression.
+     */
+    @Test
+    public void regular_expression_maven() throws Exception {
+        AnalysisConfigurator<TaskScannerMavenBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerMavenBuildSettings>() {
+                    @Override
+                    public void configure(TaskScannerMavenBuildSettings settings) {
+                        settings.setPattern("**/*.txt");
+                        settings.setNormalPriorityTags("^.*(TODO(?:[0-9]*))(.*)$");
+                        settings.setAsRegexp(true);
+                    }
+                };
+
+        MavenModuleSet job = setupJob("/tasks_plugin/regexp",
+                MavenModuleSet.class, TaskScannerMavenBuildSettings.class,
+                buildConfigurator, null);
+
+        verifyRegularExpressionScannerResult(job);
+    }
+
+
+    /**
+     * This tests objective is to verify that the plugin correctly works for
      * multiple tags per priority.
      * In the first step the task scanner is configured with two tags for high
      * priority tasks. Prior to the second build also the normal and low priority
@@ -179,8 +237,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     public void multiple_task_tags() throws Exception{
         //do basic setup
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -221,7 +279,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
         // find the second priority task in TSRDockerImage.java (line 102) amd
         // a low priority task in TSRDockerImage.java (line 56).
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setNormalPriorityTags("TODO,XXX");
@@ -251,7 +309,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
 
 
     /**
-     * This test's objective is to verify the detection of closed tasks.
+     * This tests objective is to verify the detection of closed tasks.
      * Therefore two runs of the same job with the same task scanner setup are
      * conducted but the fileset in the workspace will be replaced by the same
      * files containing less warnings for the second run.
@@ -261,8 +319,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     @Test
     public void closed_tasks() throws Exception {
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -313,7 +371,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     }
 
     /**
-     * This test's objective is to check the "Run always" option of the publisher,
+     * This tests objective is to check the "Run always" option of the publisher,
      * i.e whether the task scanner activity is skipped in case the main build step
      * has already failed and the option "run always" is not activated. The option
      * is activated for the second part to also scan for tasks in this failed job
@@ -322,8 +380,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     @Test
     public void run_always_option() throws Exception {
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -350,7 +408,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
 
         // now activate "Run always"
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setCanRunOnFailed(true);
@@ -374,18 +432,18 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     }
 
     /**
-     * This test's objective to check the correct treatment and display of tasks
+     * This tests objective to check the correct treatment and display of tasks
      * in files with windows-1251 (a.k.a. cp1251) encoding.
      *
      * This test shall reproduce the observations described in JENKINS-22744:
      * https://issues.jenkins-ci.org/browse/JENKINS-22744
      *
      */
-    @Test @Bug("22744") @WithPlugins("analysis-core@1.58-SNAPSHOT")
+    @Test @Bug("22744") @WithPlugins("analysis-core@1.58")
     public void file_encoding_windows1251() throws Exception {
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -435,8 +493,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     @Test
     public void basic_functions_maven_project() throws Exception{
         //do setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerMavenBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerMavenBuildSettings>() {
+        AnalysisConfigurator<TaskScannerMavenBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerMavenBuildSettings>() {
                     @Override
                     public void configure(TaskScannerMavenBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -473,7 +531,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
 
         // re-configure the job and set a threshold to mark the build as failed
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerMavenBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerMavenBuildSettings>() {
                     @Override
                     public void configure(TaskScannerMavenBuildSettings settings) {
                         settings.setBuildFailedTotalHigh("0");
@@ -503,7 +561,7 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
 
 
     /**
-     * This test's objective is to the correct treatment of the status thresholds (totals).
+     * This tests objective is to the correct treatment of the status thresholds (totals).
      * Therefore a more complex test case has been created which modifies files and task tags
      * to scan for multiple times to create appropriate scenarios for different thresholds.
      *
@@ -525,8 +583,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     public void status_thresholds() throws Exception {
 
         //do basic setup
-        AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator =
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setPattern("**/*.java");
@@ -623,10 +681,10 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
      * @return The modified {@link org.jenkinsci.test.acceptance.po.FreeStyleJob}.
      */
 
-    private FreeStyleJob status_thresholds_step2(FreeStyleJob j, AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
+    private FreeStyleJob status_thresholds_step2(FreeStyleJob j, AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
 
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setLowPriorityTags("@Deprecated,\\?\\?\\?"); // add tag "???"
@@ -670,9 +728,9 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
      * @return The modified {@link org.jenkinsci.test.acceptance.po.FreeStyleJob}.
      */
 
-    private FreeStyleJob status_thresholds_step3(FreeStyleJob j, AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
+    private FreeStyleJob status_thresholds_step3(FreeStyleJob j, AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setNormalPriorityTags("TODO,XXX"); // add tag "XXX"
@@ -723,9 +781,9 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
      * @return The modified {@link org.jenkinsci.test.acceptance.po.FreeStyleJob}.
      */
 
-    private FreeStyleJob status_thresholds_step4(FreeStyleJob j, AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
+    private FreeStyleJob status_thresholds_step4(FreeStyleJob j, AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setLowPriorityTags("@Deprecated,\\?\\?\\?"); // add tag "???"
@@ -771,9 +829,9 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
      * @return The modified {@link org.jenkinsci.test.acceptance.po.FreeStyleJob}.
      */
 
-    private FreeStyleJob status_thresholds_step5(FreeStyleJob j, AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
+    private FreeStyleJob status_thresholds_step5(FreeStyleJob j, AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setNormalPriorityTags("TODO"); //remove tag "XXX"
@@ -820,9 +878,9 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
      * @return The modified {@link org.jenkinsci.test.acceptance.po.FreeStyleJob}.
      */
 
-    private FreeStyleJob status_thresholds_step6(FreeStyleJob j, AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
+    private FreeStyleJob status_thresholds_step6(FreeStyleJob j, AnalysisConfigurator<TaskScannerFreestyleBuildSettings> buildConfigurator, TaskScannerAction tsa){
         buildConfigurator =
-                new AbstractCodeStylePluginBuildConfigurator<TaskScannerFreestyleBuildSettings>() {
+                new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
                     @Override
                     public void configure(TaskScannerFreestyleBuildSettings settings) {
                         settings.setIgnoreCase(true);
@@ -975,9 +1033,8 @@ public class TaskScannerPluginTest extends AbstractCodeStylePluginHelper{
     private void assertTypesTabFS1E2(TaskScannerAction tsa){
         SortedMap<String, Integer> expectedContent = new TreeMap<>();
 
-        expectedContent.put("@Deprecated", 1);
-        expectedContent.put("FIXME", 1);
-        expectedContent.put("fixme", 1);
+        expectedContent.put("@DEPRECATED", 1);
+        expectedContent.put("FIXME", 2);
         expectedContent.put("TODO", 4);
         expectedContent.put("BUG", 1);
         expectedContent.put("XXX", 1);
