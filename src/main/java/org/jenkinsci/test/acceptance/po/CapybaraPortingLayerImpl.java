@@ -107,7 +107,7 @@ public class CapybaraPortingLayerImpl implements CapybaraPortingLayer {
 
     @Override
     public WebElement waitFor(final By selector) {
-        return waitFor(selector, 30);
+        return waitFor(selector, 0);
     }
 
     /**
@@ -144,6 +144,10 @@ public class CapybaraPortingLayerImpl implements CapybaraPortingLayer {
             waitForCond(new Callable<Boolean>() {
                 @Override public Boolean call() throws Exception {
                     return matcher.matchesSafely(item);
+                }
+
+                @Override public String toString() {
+                    return matcher.getDescription();
                 }
             }, timeout);
         } catch (TimeoutException x) {

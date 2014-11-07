@@ -42,6 +42,8 @@ public class JenkinsDatabaseSecurityRealm extends SecurityRealm {
         control(by.input("fullname")).set(name);
         control(by.input("email")).set(name + "@mailinator.com");
 
+        clickButton("Sign up");
+
         return new User(getPage().getJenkins(), name);
     }
 }

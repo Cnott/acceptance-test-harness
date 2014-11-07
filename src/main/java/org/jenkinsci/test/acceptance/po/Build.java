@@ -186,7 +186,7 @@ public class Build extends ContainerPageObject {
     }
 
     public Artifact getArtifact(String artifact) {
-        return new Artifact(this, url("artifact/%s", artifact));
+        return new Artifact(this, artifact);
     }
 
     public List<Artifact> getArtifacts() {
@@ -270,5 +270,10 @@ public class Build extends ContainerPageObject {
         final URL changesUrl = url("changes");
         visit(changesUrl);
         return new Changes(this, changesUrl);
+    }
+
+    @Override
+    public String toString() {
+        return job.name + " " + getNumber();
     }
 }
