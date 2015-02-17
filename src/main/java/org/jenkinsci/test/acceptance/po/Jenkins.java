@@ -1,11 +1,14 @@
 package org.jenkinsci.test.acceptance.po;
 
+import static org.hamcrest.Matchers.not;
+import static org.jenkinsci.test.acceptance.Matchers.hasContent;
 import hudson.util.VersionNumber;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.Map;
 import java.util.logging.Level;
+
 import javax.inject.Inject;
 
 import org.jenkinsci.test.acceptance.controller.JenkinsController;
@@ -112,9 +115,8 @@ public class Jenkins extends Node {
         visit("restart");
         clickButton("Yes");
 
-        do {
-            elasticSleep(1000);
-        } while (driver.getPageSource().contains("Please wait"));
+        waitFor(driver, not(hasContent("Please wait")), 180);
+
     }
 
     public JenkinsLogger getLogger(String name) {

@@ -1,6 +1,7 @@
 package plugins;
 
 import javax.annotation.CheckForNull;
+import javax.mail.MessagingException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.IOException;
@@ -12,11 +13,15 @@ import org.custommonkey.xmlunit.XMLAssert;
 import org.custommonkey.xmlunit.XMLUnit;
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
 import org.jenkinsci.test.acceptance.junit.Resource;
+import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisAction;
+import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisAction.Tab;
 import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisConfigurator;
 import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisMavenSettings;
 import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisSettings;
 import org.jenkinsci.test.acceptance.plugins.dashboard_view.AbstractDashboardViewPortlet;
 import org.jenkinsci.test.acceptance.plugins.dashboard_view.DashboardView;
+import org.jenkinsci.test.acceptance.plugins.email_ext.EmailExtPublisher;
+import org.jenkinsci.test.acceptance.plugins.mailer.MailerGlobalConfig;
 import org.jenkinsci.test.acceptance.plugins.maven.MavenBuildStep;
 import org.jenkinsci.test.acceptance.plugins.maven.MavenInstallation;
 import org.jenkinsci.test.acceptance.plugins.maven.MavenModuleSet;
@@ -26,25 +31,80 @@ import org.jenkinsci.test.acceptance.po.Job;
 import org.jenkinsci.test.acceptance.po.ListView;
 import org.jenkinsci.test.acceptance.po.ListViewColumn;
 import org.jenkinsci.test.acceptance.po.MatrixProject;
+import org.jenkinsci.test.acceptance.po.Node;
 import org.jenkinsci.test.acceptance.po.PostBuildStep;
 import org.jenkinsci.test.acceptance.po.Slave;
 import org.jenkinsci.test.acceptance.po.View;
 import org.jenkinsci.test.acceptance.slave.SlaveController;
+import org.jenkinsci.test.acceptance.utils.mail.MailService;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
 
 import com.google.inject.Inject;
 
 import static java.util.Collections.*;
+import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.*;
 
+/**
+ * Base class for tests of the static analysis plug-ins.
+ */
 public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
+    /** Configuration of the mailing in Jenkins global configuration screen. */
+    @Inject
+    private MailerGlobalConfig mailer;
+
+    /** Mock that verifies that mails have been sent by Jenkins email-ext plugin. */
+    @Inject
+    private MailService mail;
+
+    /** Provides slaves for tests that need build slaves. */
+    @Inject
+    private SlaveController slaveController;
 
     /**
-     * For slave test
+     * Configures the mailer with default values required for the mock.
      */
-    @Inject
-    SlaveController slaveController;
+    protected void setUpMailer() {
+        jenkins.configure();
+        mailer.setupDefaults();
+        jenkins.save();
+    }
+
+    /**
+     * Configures the mail notification of the email-ext plug-in.
+     *
+     * @param job     the job to configure
+     * @param subject subject of the mail
+     * @param body    body of the mail
+     */
+    protected void configureEmailNotification(final FreeStyleJob job, final String subject, final String body) {
+        job.configure();
+        EmailExtPublisher pub = job.addPublisher(EmailExtPublisher.class);
+        pub.subject.set(subject);
+        pub.setRecipient("dev@example.com");
+        pub.body.set(body);
+        job.save();
+    }
+
+    /**
+     * Verifies that Jenkins sent a mail with the specified content.
+     *
+     * @param subject the expected subject of the mail
+     * @param body    the expected body of the mail
+     */
+    protected void verifyReceivedMail(final String subject, final String body) {
+        try {
+            mail.assertMail(Pattern.compile(subject), "dev@example.com", Pattern.compile(body));
+        }
+        catch (MessagingException e) {
+            throw new IllegalStateException("Mailer exception", e);
+        }
+        catch (IOException e) {
+            throw new IllegalStateException("Mailer exception", e);
+        }
+    }
 
     /**
      * Set up a Job of a certain type with a given resource and a publisher which can be configured by providing a
@@ -57,9 +117,9 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the new job
      */
     public <J extends Job, T extends AnalysisSettings & PostBuildStep> J setupJob(String resourceToCopy,
-                                                                                  Class<J> jobClass,
-                                                                                  Class<T> publisherBuildSettingsClass,
-                                                                                  AnalysisConfigurator<T> configurator) {
+            Class<J> jobClass,
+            Class<T> publisherBuildSettingsClass,
+            AnalysisConfigurator<T> configurator) {
         return setupJob(resourceToCopy, jobClass, publisherBuildSettingsClass, configurator, null);
     }
 
@@ -75,10 +135,10 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the new job
      */
     public <J extends Job, T extends AnalysisSettings & PostBuildStep> J setupJob(String resourceToCopy,
-                                                                                  Class<J> jobClass,
-                                                                                  Class<T> publisherBuildSettingsClass,
-                                                                                  AnalysisConfigurator<T> configurator,
-                                                                                  String goal) {
+            Class<J> jobClass,
+            Class<T> publisherBuildSettingsClass,
+            AnalysisConfigurator<T> configurator,
+            String goal) {
         if (jobClass.isAssignableFrom(MavenModuleSet.class)) {
             MavenInstallation.ensureThatMavenIsInstalled(jenkins);
         }
@@ -134,8 +194,8 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the edited job
      */
     public <J extends Job, T extends AnalysisSettings & PostBuildStep> J editJob(String newResourceToCopy,
-                                                                                 boolean isAdditionalResource,
-                                                                                 J job) {
+            boolean isAdditionalResource,
+            J job) {
         return edit(newResourceToCopy, isAdditionalResource, job, null, null);
     }
 
@@ -152,10 +212,10 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the edited job
      */
     public <J extends Job, T extends AnalysisSettings & PostBuildStep> J editJob(String newResourceToCopy,
-                                                                                 boolean isAdditionalResource,
-                                                                                 J job,
-                                                                                 Class<T> publisherBuildSettingsClass,
-                                                                                 AnalysisConfigurator<T> configurator) {
+            boolean isAdditionalResource,
+            J job,
+            Class<T> publisherBuildSettingsClass,
+            AnalysisConfigurator<T> configurator) {
         return edit(newResourceToCopy, isAdditionalResource, job, publisherBuildSettingsClass, configurator);
     }
 
@@ -170,9 +230,9 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the edited job
      */
     public <J extends Job, T extends AnalysisSettings & PostBuildStep> J editJob(boolean isAdditionalResource,
-                                                                                 J job,
-                                                                                 Class<T> publisherBuildSettingsClass,
-                                                                                 AnalysisConfigurator<T> configurator) {
+            J job,
+            Class<T> publisherBuildSettingsClass,
+            AnalysisConfigurator<T> configurator) {
         return edit(null, isAdditionalResource, job, publisherBuildSettingsClass, configurator);
     }
 
@@ -189,16 +249,17 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return the edited job
      */
     private <J extends Job, T extends AnalysisSettings & PostBuildStep> J edit(String newResourceToCopy,
-                                                                               boolean isAdditionalResource,
-                                                                               J job,
-                                                                               Class<T> publisherBuildSettingsClass,
-                                                                               @CheckForNull AnalysisConfigurator<T> configurator) {
+            boolean isAdditionalResource,
+            J job,
+            Class<T> publisherBuildSettingsClass,
+            @CheckForNull AnalysisConfigurator<T> configurator) {
         job.configure();
 
         if (newResourceToCopy != null) {
             //check whether to exchange the copy resource shell step
             if (!isAdditionalResource) {
                 job.removeFirstBuildStep();
+                elasticSleep(1000); // chrome needs some time
             }
 
             //add the new copy resource shell step
@@ -251,9 +312,9 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @return The configured job.
      */
     public <T extends AnalysisMavenSettings> MavenModuleSet setupMavenJob(String resourceProjectDir,
-                                                                          String goal,
-                                                                          Class<T> codeStyleBuildSettings,
-                                                                          AnalysisConfigurator<T> configurator) {
+            String goal,
+            Class<T> codeStyleBuildSettings,
+            AnalysisConfigurator<T> configurator) {
         MavenInstallation.ensureThatMavenIsInstalled(jenkins);
 
         MavenModuleSet job = jenkins.jobs.create(MavenModuleSet.class);
@@ -298,7 +359,7 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @param slave Slave to run job on
      * @return The made build
      */
-    public Build buildJobOnSlaveWithSuccess(FreeStyleJob job, Slave slave) {
+    public Build buildJobOnSlaveWithSuccess(FreeStyleJob job, Node slave) {
         return job.startBuild(singletonMap("slavename", slave.getName())).shouldSucceed();
     }
 
@@ -310,24 +371,30 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
      * @param apiUrl          The API-Url, declares which build API shall be called.
      * @param expectedXmlPath The Resource-Path to a file, which contains the expected XML
      */
-    protected void assertXmlApiMatchesExpected(Build build, String apiUrl, String expectedXmlPath) throws ParserConfigurationException, SAXException, IOException {
-        XMLUnit.setIgnoreWhitespace(true);
-        String xmlUrl = build.url(apiUrl).toString();
-        DocumentBuilder documentBuilder = DocumentBuilderFactoryImpl.newInstance().newDocumentBuilder();
-        Document actual = documentBuilder.parse(xmlUrl);
+    protected void assertXmlApiMatchesExpected(final Build build, final String apiUrl, final String expectedXmlPath) {
+        try {
+            XMLUnit.setIgnoreWhitespace(true);
+            String xmlUrl = build.url(apiUrl).toString();
+            DocumentBuilder documentBuilder = null;
+            documentBuilder = DocumentBuilderFactoryImpl.newInstance().newDocumentBuilder();
 
-        Document expected = documentBuilder.parse(resource(expectedXmlPath).asFile());
-        XMLAssert.assertXMLEqual(expected, actual);
+            Document actual = documentBuilder.parse(xmlUrl);
+            Document expected = documentBuilder.parse(resource(expectedXmlPath).asFile());
+            XMLAssert.assertXMLEqual(expected, actual);
+        }
+        catch (ParserConfigurationException | SAXException | IOException exception) {
+            throw new RuntimeException("Can't verify API XML", exception);
+        }
     }
 
     /**
      * Checks if the area links of jobs matches the regular expression.
      *
-     * @param job               Job to check the area links
-     * @param regularExpression Expression should match
+     * @param job    job to check the area links
+     * @param plugin URL of the corresponding plug-in
      */
-    public void assertAreaLinksOfJobAreLike(Job job, String regularExpression) {
-        Pattern pattern = Pattern.compile(regularExpression);
+    public void assertAreaLinksOfJobAreLike(Job job, String plugin) {
+        Pattern pattern = Pattern.compile("^\\d+/" + plugin + "Result/(HIGH|NORMAL|LOW)");
         for (String currentLink : job.getAreaLinks()) {
             assertTrue("Link should be relative", pattern.matcher(currentLink).matches());
         }
@@ -393,5 +460,24 @@ public abstract class AbstractAnalysisTest extends AbstractJUnitTest {
         view.addBottomPortlet(portlet);
         view.save();
         return view;
+    }
+
+    /**
+     * Verifies that the source code of an affected file is correctly visualized. The specified tab is used to find the
+     * file with the warning. On this tab the corresponding link is clicked and the source file should be shown in a new
+     * page.
+     *
+     * @param action          the action holding the results
+     * @param file            the affected file that contains the warning
+     * @param line            the affected line number
+     * @param expectedContent the expected content of the source line (includes the line number)
+     * @param expectedToolTip a substring that should be part of the warning tool tip
+     */
+    protected void verifySourceLine(final AnalysisAction action, final String file, final int line,
+            final String expectedContent, final String expectedToolTip) {
+        Tab tabId = Tab.DETAILS;
+        assertThat(action.getLinkedSourceFileLineNumber(tabId, file, line), is(line));
+        assertThat(action.getLinkedSourceFileText(tabId, file, line), startsWith(expectedContent));
+        assertThat(action.getLinkedSourceFileToolTip(tabId, file, line), containsString(expectedToolTip));
     }
 }

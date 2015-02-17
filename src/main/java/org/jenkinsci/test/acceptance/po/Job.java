@@ -1,23 +1,35 @@
 package org.jenkinsci.test.acceptance.po;
 
-import com.google.inject.Injector;
-import cucumber.api.DataTable;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPOutputStream;
+
 import org.apache.commons.io.IOUtils;
 import org.codehaus.plexus.util.Base64;
 import org.jenkinsci.test.acceptance.junit.Resource;
 import org.openqa.selenium.WebElement;
 import org.zeroturnaround.zip.ZipUtil;
 
-import java.io.*;
-import java.net.URL;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.zip.GZIPOutputStream;
+import com.google.inject.Injector;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.jenkinsci.test.acceptance.Matchers.hasContent;
+import cucumber.api.DataTable;
+import static org.hamcrest.CoreMatchers.*;
+import static org.hamcrest.MatcherAssert.*;
+import static org.jenkinsci.test.acceptance.Matchers.*;
 
 /**
  * Job Page object superclass.
@@ -35,8 +47,8 @@ public class Job extends ContainerPageObject {
 
     private List<Parameter> parameters = new ArrayList<>();
 
+    // TODO these controls (and some methods) actually belong in a subclass corresponding to AbstractProject
     protected List<PostBuildStep> publishers = new ArrayList<>();
-
     public final Control concurrentBuild = control("/concurrentBuild");
     private final Control hasSlaveAffinity = control("/hasSlaveAffinity");
     private final Control assignedLabel = control("/hasSlaveAffinity/assignedLabelString", "/label");
@@ -120,7 +132,9 @@ public class Job extends ContainerPageObject {
         ensureConfigPage();
 
         control(by.path("/hetero-list-add[%s]", section)).selectDropdownMenu(type);
-        String path = last(by.xpath("//div[@name='%s']", section)).getAttribute("path");
+        elasticSleep(1000); // it takes some time until the element is visible
+        WebElement last = last(by.xpath("//div[@name='%s']", section));
+        String path = last.getAttribute("path");
 
         return newInstance(type, this, path);
     }
@@ -323,24 +337,6 @@ public class Job extends ContainerPageObject {
     }
 
     /**
-     * Verify that the job contains some builds on the given node
-     * To test whether the the job has built on the master, the jenkins instance has to be
-     * passed in the parameter.
-     */
-    public void shouldHaveBuiltOn(Node n) {
-        assertThat(hasBuiltOn(n), is(true));
-    }
-
-    /**
-     * Check if the job contains some builds on the given node.
-     * To test whether the the job has built on the master, the jenkins instance has to be
-     * passed in the parameter.
-     */
-    public boolean hasBuiltOn(Node n) {
-        return n.getBuildHistory().includes(this.name);
-    }
-
-    /**
      * Verify that the job contains some builds on exact one of the given list of nodes.
      * To test whether the the job has built on the master, the jenkins instance has to be
      * passed in the parameter.
@@ -349,7 +345,7 @@ public class Job extends ContainerPageObject {
         int noOfNodes = 0;
 
         for (Node n : nodes) {
-            if (hasBuiltOn(n)) {
+            if (!n.getBuildHistory().getBuildsOf(this).isEmpty()) {
                 noOfNodes++;
             }
         }
@@ -382,5 +378,21 @@ public class Job extends ContainerPageObject {
             }
         }
         return links;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (other == null) return false;
+        if (this == other) return true;
+
+        if (!(other instanceof Job)) return false;
+
+        Job rhs = (Job) other;
+        return this.name.equals(rhs.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode() ^ url.hashCode();
     }
 }

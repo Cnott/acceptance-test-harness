@@ -24,58 +24,42 @@
 package core;
 
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
-import org.jenkinsci.test.acceptance.po.BuildHistory;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
 import org.jenkinsci.test.acceptance.po.GlobalSecurityConfig;
-import org.jenkinsci.test.acceptance.po.MatrixProject;
 import org.jenkinsci.test.acceptance.po.ServletSecurityRealm;
-import org.jenkinsci.test.acceptance.po.ShellBuildStep;
 import org.jenkinsci.test.acceptance.po.StringParameter;
 import org.junit.Test;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * Test to trigger builds remotely.
- * @author Orjan Percy <orjan.percy@sonymobile.com>
  */
 public class TriggerRemoteBuildsTest extends AbstractJUnitTest {
-    public static int NO_BUILDS = 30;
 
-    /**
-     * Tests that matrix builds can be triggered remotely from another job.
-     */
     @Test
-    public void triggerMatrixBuildsRemotely() {
+    public void triggerBuildRemotely() {
 
         GlobalSecurityConfig sc = new GlobalSecurityConfig(jenkins);
         sc.open();
         sc.useRealm(ServletSecurityRealm.class);
         sc.save();
 
-        MatrixProject job = jenkins.jobs.create(MatrixProject.class);
-        job.configure();
-        job.addParameter(StringParameter.class).setName("ID").setDefault("0");
-        job.runSequentially.check();
+        FreeStyleJob subject = jenkins.jobs.create();
+        subject.configure();
+        subject.addParameter(StringParameter.class).setName("ID");
         // Trigger builds remotely (e.g., from scripts)")
+        // TODO move to page area
         jenkins.control("/pseudoRemoteTrigger").click();
         jenkins.control("/pseudoRemoteTrigger/authToken").fillIn("authToken", "TOKEN");
-        job.addUserAxis("X", "1 2 3");
-        job.addShellStep("#!/bin/bash\n" +
-                "echo Job request ${ID}\n");
-        job.save();
+        subject.addShellStep("test 'id_to_pass' = $ID");
+        subject.save();
 
-        FreeStyleJob job2 = jenkins.jobs.create(FreeStyleJob.class);
-        job2.addBuildStep(ShellBuildStep.class);
-        String s = "#!/bin/bash -x\n" +
-                "for i in {1.." + NO_BUILDS + "}\n" +
-                "do\n" +
-                "\tcurl " + job.url.toString() + "buildWithParameters?token=TOKEN\\&ID=$i\n" +
-                "done";
-        jenkins.control("/builder/command").setAtOnce(s);
-        job2.save();
+        FreeStyleJob trigger = jenkins.jobs.create();
+        trigger.addShellStep(
+                "curl " + subject.url.toString() + "buildWithParameters?token=TOKEN\\&ID=id_to_pass"
+        );
+        trigger.save();
 
-        job2.startBuild().waitUntilFinished();
-        int nrOfBuilds = jenkins.getBuildHistory().numberOfInclusions(job.name);
-        assertThat("All triggered builds have not been run or put in build queue.", nrOfBuilds == NO_BUILDS);
+        trigger.startBuild().shouldSucceed();
+        subject.getLastBuild().shouldSucceed();
     }
 }

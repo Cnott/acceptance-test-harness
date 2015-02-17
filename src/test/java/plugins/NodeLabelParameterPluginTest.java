@@ -20,9 +20,12 @@ import org.openqa.selenium.WebElement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.jenkinsci.test.acceptance.po.BuildHistory.containsBuildOf;
 
 /**
  * Feature: Use node name and label as parameter
@@ -56,13 +59,13 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
     public void build_on_a_particular_slave() throws Exception {
         FreeStyleJob j = jenkins.jobs.create();
 
-        Slave s = slave.install(jenkins).get();
+        Node s = slave.install(jenkins).get();
         j.configure();
         j.addParameter(NodeParameter.class).setName("slavename");
         j.save();
 
         Build b = j.startBuild(singletonMap("slavename", s.getName())).shouldSucceed();
-        assertThat(b.getNode(), is(s.getName()));
+        assertThat(b.getNode(), is(s));
     }
 
     /**
@@ -77,7 +80,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
     public void build_with_preselected_node() throws Exception {
         FreeStyleJob j = jenkins.jobs.create();
 
-        Slave s = slave.install(jenkins).get();
+        Node s = slave.install(jenkins).get();
         j.configure();
         NodeParameter p = j.addParameter(NodeParameter.class);
         p.setName("slavename");
@@ -96,7 +99,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         assertThat("master", is(availableNodes.get(0).getText()));
         assertThat(s.getName(), is(availableNodes.get(1).getText()));
         Build b = j.startBuild(singletonMap("slavename", s.getName())).shouldSucceed();
-        assertThat(b.getNode(), is(s.getName()));
+        assertThat(b.getNode(), is(s));
     }
 
     /**
@@ -119,18 +122,18 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
     public void run_on_label() throws Exception {
         FreeStyleJob j = jenkins.jobs.create();
 
-        Slave s1 = slave.install(jenkins).get();
-        Slave s2 = slave2.install(jenkins).get();
+        Node s1 = slave.install(jenkins).get();
+        Node s2 = slave2.install(jenkins).get();
 
         j.configure();
         j.addParameter(LabelParameter.class).setName("slavelabel");
         j.save();
 
         Build b = j.startBuild(singletonMap("slavelabel", s1.getName())).shouldSucceed();
-        assertThat(b.getNode(), is(s1.getName()));
+        assertThat(b.getNode(), is(s1));
 
         b = j.startBuild(singletonMap("slavelabel", String.format("!%s && !%s", s1.getName(), s2.getName()))).shouldSucceed();
-        assertThat(b.getNode(), is("master"));
+        assertThat(b.getNode(), is((Node) jenkins));
     }
 
     /**
@@ -168,8 +171,8 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
 
         j.getLastBuild().waitUntilFinished();
 
-        j.shouldHaveBuiltOn(jenkins);
-        j.shouldHaveBuiltOn(s);
+        assertThat(jenkins.getBuildHistory(), containsBuildOf(j));
+        assertThat(s.getBuildHistory(), containsBuildOf(j));
     }
 
     /**
@@ -206,7 +209,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         assertThat(s.isOnline(), is(true));
 
         b.waitUntilFinished();
-        j.shouldHaveBuiltOn(s);
+        assertThat(s.getBuildHistory().getBuildsOf(j), contains(b));
     }
 
     /**
@@ -277,7 +280,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
 
         //ensure that the build on the online slave has been done
         assertThat(j.getLastBuild().waitUntilFinished().getNumber(), is(equalTo(1)));
-        j.shouldHaveBuiltOn(s1);
+        assertThat(s1.getBuildHistory().getBuildsOf(j), contains(b));
 
         assertThat(j.open(), Matchers.hasContent(s2.getName() + " is offline"));
 
@@ -286,7 +289,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         assertThat(s2.isOnline(), is(true));
 
         assertThat(j.getLastBuild().waitUntilFinished().getNumber(), is(equalTo(2)));
-        j.shouldHaveBuiltOn(s2);
+        assertThat(s2.getBuildHistory().getBuildsOf(j), contains(j.getLastBuild()));
     }
 
     /**
@@ -327,7 +330,7 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         b.waitUntilFinished();
 
         //ensure that the build on the online slave has been done
-        j.shouldHaveBuiltOn(s1);
+        assertThat(s1.getBuildHistory().getBuildsOf(j), contains(b));
 
         //use scheduleBuild instead of startBuild to avoid a timeout waiting for Build being started
         b = j.scheduleBuild(singletonMap("slavename", s2.getName()));
@@ -349,10 +352,8 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
     public void trigger_if_succeeds_with_failed_main_build() throws Exception {
         FreeStyleJob j = jenkins.jobs.create();
 
-        ArrayList<Node> slaves = new ArrayList<>();
-
-        slaves.add(slave.install(jenkins).get());
-        slaves.add(slave.install(jenkins).get());
+        Slave s1 = slave.install(jenkins).get();
+        Slave s2 = slave.install(jenkins).get();
 
         j.configure();
 
@@ -367,14 +368,15 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         j.save();
 
         // select both slaves for this build
-        j.startBuild(singletonMap("slavename", slaves.get(0).getName() + "," + slaves.get(1).getName()))
-                .shouldFail();
+        Build build = j.startBuild(singletonMap("slavename", s1.getName() + "," + s2.getName())).shouldFail();
 
         // verify failed result prevents the job to be built on further nodes.
         // As the nodes get random names and the selected nodes are utilized in alphabetical order
         // of their names, the first build will not necessarily be done on s1. Thus, it can only
         // be verified that the job has been built on one of the slaves.
-        j.shouldHaveBuiltOnOneOfNNodes(slaves);
+        Set<Build> history = s1.getBuildHistory().getBuilds();
+        history.addAll(s2.getBuildHistory().getBuilds());
+        assertThat(history, contains(build));
 
         assertThat(j.getNextBuildNumber(), is(2));
 
@@ -523,12 +525,10 @@ public class NodeLabelParameterPluginTest extends AbstractJUnitTest {
         assertThat("Amount of selectable nodes", slaves.size(), is(2));
         assertThat(slaves, containsInAnyOrder("master", s1.getName()));
 
-        j.startBuild(singletonMap("slavename", s1.getName() + ",master"));
+        j.startBuild(singletonMap("slavename", s1.getName() + ",master")).waitUntilFinished();
 
-        j.getLastBuild().waitUntilFinished();
-
-        j.shouldHaveBuiltOn(jenkins);
-        j.shouldHaveBuiltOn(s1);
+        assertThat(jenkins.getBuildHistory(), containsBuildOf(j));
+        assertThat(s1.getBuildHistory(), containsBuildOf(j));
 
         assertThat(j.getNextBuildNumber(), is(3));
     }

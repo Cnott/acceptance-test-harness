@@ -1,7 +1,11 @@
 package plugins;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.jenkinsci.test.acceptance.junit.Bug;
+import org.jenkinsci.test.acceptance.junit.SmokeTest;
 import org.jenkinsci.test.acceptance.junit.WithPlugins;
 import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisConfigurator;
 import org.jenkinsci.test.acceptance.plugins.warnings.WarningsAction;
@@ -11,8 +15,10 @@ import org.jenkinsci.test.acceptance.po.Build;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
 import org.jenkinsci.test.acceptance.po.Job;
 import org.jenkinsci.test.acceptance.po.ListView;
+import org.jenkinsci.test.acceptance.po.MatrixConfiguration;
 import org.jenkinsci.test.acceptance.po.MatrixProject;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 
@@ -31,6 +37,77 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
     private static final String SEVERAL_PARSERS_FILE_NAME = "warningsAll.txt";
     /** Contains warnings for several parsers. */
     private static final String SEVERAL_PARSERS_FILE_FULL_PATH = "/warnings_plugin/" + SEVERAL_PARSERS_FILE_NAME;
+
+    /**
+     * Build a matrix job with three configurations. For each configuration a different set of warnings will be parsed
+     * with the same parser (GCC). After the successful build the total number of warnings at the root level should be
+     * set to 12 (sum of all three configurations). Moreover, for each configuration the total number of warnings is
+     * also verified (4, 6, and 2 warnings).
+     */
+    // TODO: run the job twice and check for the graphs
+    @Test @Bug("11225")
+    public void should_report_warnings_per_axis() {
+        String file = "matrix-warnings.txt";
+        MatrixProject job = setupJob("/warnings_plugin/" + file, MatrixProject.class,
+                WarningsBuildSettings.class, new AnalysisConfigurator<WarningsBuildSettings>() {
+                    @Override
+                    public void configure(WarningsBuildSettings settings) {
+                        settings.addConsoleScanner("GNU C Compiler 4 (gcc)");
+                    }
+                });
+
+        job.configure();
+        job.addUserAxis("user_axis", "one two three");
+        job.addShellStep("cat " + file + "| grep $user_axis");
+        job.save();
+
+        Build build = buildJobAndWait(job).shouldSucceed();
+
+        String title = "GNU C Compiler Warnings";
+        assertThatActionExists(job, build, title);
+        build.open();
+        assertThat(driver, hasContent(title + ": 12"));
+
+        Map<String, Integer> warningsPerAxis = new HashMap<>();
+        warningsPerAxis.put("user_axis=one", 4);
+        warningsPerAxis.put("user_axis=two", 6);
+        warningsPerAxis.put("user_axis=three", 2);
+        for (MatrixConfiguration axis : job.getConfigurations()) {
+            Build axisBuild = axis.getLastBuild();
+            assertThat(axisBuild, hasAction(title));
+            assertThat(driver, hasContent(title + ": " + warningsPerAxis.get(axis.name)));
+        }
+
+    }
+
+    /**
+     * Checks that the plug-in sends a mail after a build has been failed. The content of the mail contains several
+     * tokens that should be expanded in the mail with the correct vaules.
+     */
+    @Test
+    @Bug("25501")
+    @Category(SmokeTest.class)
+    @WithPlugins("email-ext")
+    public void should_send_mail_with_expanded_tokens() {
+        setUpMailer();
+
+        AnalysisConfigurator<WarningsBuildSettings> buildConfigurator = new AnalysisConfigurator<WarningsBuildSettings>() {
+            @Override
+            public void configure(WarningsBuildSettings settings) {
+                settings.addWorkspaceFileScanner("Java Compiler (javac)", "**/*");
+                settings.setBuildFailedTotalAll("0");
+            }
+        };
+        FreeStyleJob job = setupJob(SEVERAL_PARSERS_FILE_FULL_PATH, FreeStyleJob.class,
+                WarningsBuildSettings.class, buildConfigurator);
+
+        configureEmailNotification(job, "Warnings: ${WARNINGS_RESULT}",
+                "Warnings: ${WARNINGS_COUNT}-${WARNINGS_FIXED}-${WARNINGS_NEW}");
+
+        job.startBuild().shouldFail();
+
+        verifyReceivedMail("Warnings: FAILURE", "Warnings: 131-0-131");
+    }
 
     /**
      * Checks that no warnings are reported if the build does nothing.
@@ -99,7 +176,8 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
     /**
      * Build a job and check set up a dashboard list-view. Check, if the dashboard view shows correct warning count.
      */
-    @Test @Bug("23446") @WithPlugins("warnings@4.42-SNAPSHOT")
+    @Test
+    @Bug("23446")
     public void build_a_matrix_project_and_check_if_dashboard_list_view_shows_correct_warnings() {
         MatrixProject job = setupJob(SEVERAL_PARSERS_FILE_FULL_PATH, MatrixProject.class,
                 WarningsBuildSettings.class, create3ParserConfiguration());
@@ -123,8 +201,8 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
     }
 
     /**
-     * Checks that warning results are correctly created for a matrix job with the parsers
-     * "Java", "JavaDoc" and "MSBuild" if the console log contains multiple warnings of these types.
+     * Checks that warning results are correctly created for a matrix job with the parsers "Java", "JavaDoc" and
+     * "MSBuild" if the console log contains multiple warnings of these types.
      */
     @Test
     public void detect_warnings_of_multiple_compilers_in_console_matrix() {
@@ -141,8 +219,32 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
     }
 
     /**
-     * Checks that warning results are correctly created for a freestyle project with the parsers
-     * "Java", "JavaDoc" and "MSBuild" if the console log contains multiple warnings of these types.
+     * Runs a job with warning threshold configured once and validates that build is marked as unstable.
+     */
+    @Test
+    @Bug("19614")
+    public void should_set_build_to_unstable_if_total_warnings_threshold_set() {
+        AnalysisConfigurator<WarningsBuildSettings> buildConfiguration = new AnalysisConfigurator<WarningsBuildSettings>() {
+            @Override
+            public void configure(WarningsBuildSettings settings) {
+                settings.addConsoleScanner("Java Compiler (javac)");
+                settings.addConsoleScanner("JavaDoc Tool");
+                settings.addConsoleScanner("MSBuild");
+                settings.setBuildUnstableTotalAll("0");
+                settings.setNewWarningsThresholdFailed("0");
+                settings.setUseDeltaValues(true);
+            }
+        };
+        FreeStyleJob job = setupJob(SEVERAL_PARSERS_FILE_FULL_PATH, FreeStyleJob.class,
+                WarningsBuildSettings.class, buildConfiguration);
+
+        catWarningsToConsole(job);
+        buildJobAndWait(job).shouldBeUnstable();
+    }
+
+    /**
+     * Checks that warning results are correctly created for a freestyle project with the parsers "Java", "JavaDoc" and
+     * "MSBuild" if the console log contains multiple warnings of these types.
      */
     @Test
     public void detect_warnings_of_multiple_compilers_in_console_freestyle() {
@@ -162,18 +264,18 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
 
     private AnalysisConfigurator<WarningsBuildSettings> create3ParserConfiguration() {
         return new AnalysisConfigurator<WarningsBuildSettings>() {
-                @Override
-                public void configure(WarningsBuildSettings settings) {
-                    settings.addConsoleScanner("Java Compiler (javac)");
-                    settings.addConsoleScanner("JavaDoc Tool");
-                    settings.addConsoleScanner("MSBuild");
-                }
-            };
+            @Override
+            public void configure(WarningsBuildSettings settings) {
+                settings.addConsoleScanner("Java Compiler (javac)");
+                settings.addConsoleScanner("JavaDoc Tool");
+                settings.addConsoleScanner("MSBuild");
+            }
+        };
     }
 
     /**
-     * Checks that warning results are correctly created for the workspace parsers
-     * "Java", "JavaDoc" and "MSBuild" if a file with multiple warnings of these types is copied to the workspace.
+     * Checks that warning results are correctly created for the workspace parsers "Java", "JavaDoc" and "MSBuild" if a
+     * file with multiple warnings of these types is copied to the workspace.
      */
     @Test
     public void detect_warnings_of_multiple_compilers_in_workspace() {
@@ -295,9 +397,9 @@ public class WarningsPluginTest extends AbstractAnalysisTest {
     }
 
     /**
-     * Checks whether the warnings plugin picks only specific warnings. The warnings to exclude are given by three exclude
-     * patterns {".*ignore1.*, .*ignore2.*, .*default.*"}. The result should be a build with 4 Java Warnings (from a file that
-     * contains 9 warnings).
+     * Checks whether the warnings plugin picks only specific warnings. The warnings to exclude are given by three
+     * exclude patterns {".*ignore1.*, .*ignore2.*, .*default.*"}. The result should be a build with 4 Java Warnings
+     * (from a file that contains 9 warnings).
      */
     @Test
     public void skip_warnings_in_ignored_parts() {

@@ -4,11 +4,11 @@ import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
 import org.jenkinsci.test.acceptance.junit.WithPlugins;
 import org.jenkinsci.test.acceptance.plugins.analysis_collector.*;
 import org.jenkinsci.test.acceptance.plugins.analysis_core.AnalysisConfigurator;
-import org.jenkinsci.test.acceptance.plugins.checkstyle.CheckstyleFreestyleBuildSettings;
+import org.jenkinsci.test.acceptance.plugins.checkstyle.CheckStyleFreestyleSettings;
 import org.jenkinsci.test.acceptance.plugins.dashboard_view.DashboardView;
-import org.jenkinsci.test.acceptance.plugins.findbugs.FindbugsFreestyleBuildSettings;
+import org.jenkinsci.test.acceptance.plugins.findbugs.FindBugsFreestyleSettings;
 import org.jenkinsci.test.acceptance.plugins.pmd.PmdFreestyleSettings;
-import org.jenkinsci.test.acceptance.plugins.tasks.TaskScannerFreestyleBuildSettings;
+import org.jenkinsci.test.acceptance.plugins.tasks.TasksFreestyleSettings;
 import org.jenkinsci.test.acceptance.po.Build;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
 import org.jenkinsci.test.acceptance.po.Job;
@@ -98,7 +98,7 @@ public class AnalysisCollectorPluginTest extends AbstractJUnitTest {
         FreeStyleJob job = jenkins.jobs.create();
         job.configure();
         job.copyResource(ANALYSIS_COLLECTOR_PLUGIN_RESOURCES + "/findbugs.xml");
-        job.addPublisher(FindbugsFreestyleBuildSettings.class);
+        job.addPublisher(FindBugsFreestyleSettings.class);
         AnalysisCollectorFreestyleBuildSettings analysis = job.addPublisher(AnalysisCollectorFreestyleBuildSettings.class);
         AnalysisConfigurator<AnalysisCollectorFreestyleBuildSettings> configurator = new AnalysisConfigurator<AnalysisCollectorFreestyleBuildSettings>() {
             @Override
@@ -277,13 +277,13 @@ public class AnalysisCollectorPluginTest extends AbstractJUnitTest {
         FreeStyleJob job = jenkins.jobs.create();
         job.configure();
         job.copyResource(resourceToCopy);
-        job.addPublisher(CheckstyleFreestyleBuildSettings.class);
+        job.addPublisher(CheckStyleFreestyleSettings.class);
         job.addPublisher(PmdFreestyleSettings.class);
-        job.addPublisher(FindbugsFreestyleBuildSettings.class);
-        TaskScannerFreestyleBuildSettings taskScannerSettings = job.addPublisher(TaskScannerFreestyleBuildSettings.class);
-        AnalysisConfigurator<TaskScannerFreestyleBuildSettings> configurator = new AnalysisConfigurator<TaskScannerFreestyleBuildSettings>() {
+        job.addPublisher(FindBugsFreestyleSettings.class);
+        TasksFreestyleSettings taskScannerSettings = job.addPublisher(TasksFreestyleSettings.class);
+        AnalysisConfigurator<TasksFreestyleSettings> configurator = new AnalysisConfigurator<TasksFreestyleSettings>() {
             @Override
-            public void configure(TaskScannerFreestyleBuildSettings settings) {
+            public void configure(TasksFreestyleSettings settings) {
                 settings.setHighPriorityTags("PRIO1");
                 settings.setNormalPriorityTags("PRIO2,TODO");
                 settings.setLowPriorityTags("PRIO3");

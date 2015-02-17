@@ -19,10 +19,10 @@ import com.google.common.base.Joiner;
  * @author Kohsuke Kawaguchi
  * @see Jenkins#slaves
  */
-public abstract class Slave extends Node {
+public class Slave extends Node {
     private final String name;
 
-    protected Slave(Jenkins j, String name) {
+    public Slave(Jenkins j, String name) {
         super(j, j.url("computer/%s/",name));
         this.name = name;
     }
@@ -59,18 +59,6 @@ public abstract class Slave extends Node {
 
     public int getExecutorCount() {
         return getJson().get("executors").size();
-    }
-
-    public void setExecutors(int n) {
-        control("/numExecutors").set(n);
-    }
-
-    public void setRemoteFs(String s) {
-        find(by.input("_.remoteFS")).sendKeys(s);
-    }
-
-    public void setLabels(String l) {
-        find(by.path("/labelString")).sendKeys(l);
     }
 
     /**

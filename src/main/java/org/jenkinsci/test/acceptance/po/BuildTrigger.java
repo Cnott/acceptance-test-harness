@@ -15,6 +15,4 @@ public class BuildTrigger extends AbstractStep implements PostBuildStep {
     public BuildTrigger(Job parent, String path) {
         super(parent, path);
     }
-
-
 }

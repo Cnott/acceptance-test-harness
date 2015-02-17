@@ -1,7 +1,7 @@
 /*
  * The MIT License
  *
- * Copyright (c) 2014 Ericsson
+ * Copyright 2014 Jesse Glick.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,33 +21,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package org.jenkinsci.test.acceptance.plugins.active_directory;
 
-import org.jenkinsci.test.acceptance.po.Control;
-import org.jenkinsci.test.acceptance.po.Jenkins;
-import org.jenkinsci.test.acceptance.po.PageObject;
+package org.jenkinsci.test.acceptance.po;
 
-/**
- * Page Object for AD security (global) configuration page.
- * @author Marco.Miller@ericsson.com
- */
-public class ActiveDirectorySecurity extends PageObject {
-    public final Jenkins jenkins;
+import com.google.inject.Injector;
+import java.net.URL;
 
-    public ActiveDirectorySecurity(Jenkins jenkins) {
-        super(jenkins.injector,jenkins.url("configureSecurity"));
-        this.jenkins = jenkins;
+@Describable("org.jenkinsci.plugins.workflow.job.WorkflowJob")
+public class WorkflowJob extends Job {
+
+    public WorkflowJob(Injector injector, URL url, String name) {
+        super(injector, url, name);
     }
 
-    /**
-     * Stop using security (if previously used) and save config.
-     */
-    public void stopUsingSecurityAndSave() {
-        open();
-        Control use = control("/useSecurity");
-        if(use.resolve().isSelected()) {
-            use.click();
-            control("/Submit").click();
-        }
-    }
+    public final Control script = control("/definition/script");
+    public final Control sandbox = control("/definition/sandbox");
+
 }

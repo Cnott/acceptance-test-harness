@@ -26,11 +26,10 @@ package plugins;
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
 import org.jenkinsci.test.acceptance.junit.WithPlugins;
 import org.jenkinsci.test.acceptance.plugins.active_directory.ActiveDirectoryEnv;
-import org.jenkinsci.test.acceptance.plugins.active_directory.ActiveDirectorySecurity;
 import org.jenkinsci.test.acceptance.plugins.active_directory.ActiveDirectorySecurityRealm;
-import org.jenkinsci.test.acceptance.plugins.matrix_auth.MatrixRow;
 import org.jenkinsci.test.acceptance.plugins.matrix_auth.ProjectBasedMatrixAuthorizationStrategy;
 import org.jenkinsci.test.acceptance.po.GlobalSecurityConfig;
+import org.jenkinsci.test.acceptance.utils.pluginTests.SecurityDisabler;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -63,11 +62,11 @@ import static org.hamcrest.Matchers.*;
  */
 @WithPlugins("active-directory@1.38")
 public class ActiveDirectoryTest extends AbstractJUnitTest {
-    private ActiveDirectorySecurity adSecurity;
+    private SecurityDisabler securityDisabler;
 
     @Before
     public void setUp() {
-        adSecurity = new ActiveDirectorySecurity(jenkins);
+        securityDisabler = new SecurityDisabler(jenkins);
     }
 
     /**
@@ -76,7 +75,8 @@ public class ActiveDirectoryTest extends AbstractJUnitTest {
      * And an active-directory plugin version 1.38 (or greater)<br>
      * And an AD security configuration that is matrix-based (project)<br>
      * And a user added to that matrix so she can Administer<br>
-     * When I save such an AD security configuration<br>
+     * When test button succeeded<br>
+     * And I save such an AD security configuration<br>
      * Then that user can log-in to that Jenkins as admin.
      */
     @Test
@@ -91,7 +91,8 @@ public class ActiveDirectoryTest extends AbstractJUnitTest {
      * And an AD security configuration that is matrix-based (project)<br>
      * And a group added to that matrix so its members can Administer<br>
      * And a user being a member of that group<br>
-     * When I save such an AD security configuration<br>
+     * When test button succeeded<br>
+     * And I save such an AD security configuration<br>
      * Then that user can log-in to that Jenkins as admin.
      */
     @Test
@@ -105,7 +106,8 @@ public class ActiveDirectoryTest extends AbstractJUnitTest {
      * And an active-directory plugin version 1.38 (or greater)<br>
      * And an AD security configuration that is matrix-based (project)<br>
      * And a wannabe added to that matrix thinking he can Administer<br>
-     * When I save such an AD security configuration<br>
+     * When test button succeeded<br>
+     * And I save such an AD security configuration<br>
      * Then that user wannabe cannot log-in to that Jenkins at all.
      */
     @Test
@@ -124,7 +126,7 @@ public class ActiveDirectoryTest extends AbstractJUnitTest {
 
     @After
     public void tearDown() {
-        adSecurity.stopUsingSecurityAndSave();
+        securityDisabler.stopUsingSecurityAndSave();
     }
 
     private void userCanLoginToJenkinsAsAdmin(String userOrGroupToAddAsAdmin) {
@@ -137,15 +139,19 @@ public class ActiveDirectoryTest extends AbstractJUnitTest {
         assertThat(domain.getAttribute("value"), is(equalTo(ActiveDirectoryEnv.get().getDomain())));
     }
 
-    private GlobalSecurityConfig saveSecurityConfig(String user) {
+    private GlobalSecurityConfig saveSecurityConfig(String userOrGroupToAddAsAdmin) {
         GlobalSecurityConfig security = new GlobalSecurityConfig(jenkins);
-        security.configure();//open
+        security.configure();
+        security = ProjectBasedMatrixAuthorizationStrategy.authorizeUserAsAdmin(userOrGroupToAddAsAdmin, security);
+        security = configSecurityRealm(security);
+        security.save();
+        return security;
+    }
+
+    private GlobalSecurityConfig configSecurityRealm(GlobalSecurityConfig security) {
         ActiveDirectorySecurityRealm realm = security.useRealm(ActiveDirectorySecurityRealm.class);
         realm.configure();
-        ProjectBasedMatrixAuthorizationStrategy auth = security.useAuthorizationStrategy(ProjectBasedMatrixAuthorizationStrategy.class);
-        MatrixRow userAuth = auth.addUser(user);
-        userAuth.admin();
-        security.save();
+        realm.validateConfig();
         return security;
     }
 }

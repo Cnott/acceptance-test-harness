@@ -133,8 +133,8 @@ public class Control extends CapybaraPortingLayerImpl {
     }
 
     /**
-     * Clicks a menu button, and selects the matching item from the drop down
-     *
+     * Clicks a menu button, and selects the matching item from the drop down.
+     * TODO using a class name as the {@link Describable#value} does not seem to work.
      * @param type
      *      Class with {@link Describable} annotation.
      */
@@ -187,6 +187,19 @@ public class Control extends CapybaraPortingLayerImpl {
 
         // move the focus away from the select control to fire onchange event
         e.sendKeys(Keys.TAB);
+    }
+
+    public void select(Class<?> describable) {
+        String element = findCaption(describable, new Finder<String>() {
+            @Override
+            protected String find(String caption) {
+                return Control.this.getElement(by.option(caption)) != null
+                        ? caption : null
+                ;
+            }
+        });
+
+        select(element);
     }
 
     public void upload(Resource res) {
