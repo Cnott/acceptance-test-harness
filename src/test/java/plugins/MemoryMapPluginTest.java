@@ -24,9 +24,11 @@
 package plugins;
 
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
+import org.jenkinsci.test.acceptance.po.Build;
 import org.jenkinsci.test.acceptance.po.Build.Result;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
@@ -37,7 +39,6 @@ public class MemoryMapPluginTest extends AbstractJUnitTest{
     
     @Test
     public void compatibilityTest() throws Exception{
-        
         //install memory-map-plugin
         jenkins.getPluginManager().installPlugin(resource("/memory_map_plugin/1.0.2.hpi").asFile());
         
@@ -65,8 +66,9 @@ public class MemoryMapPluginTest extends AbstractJUnitTest{
         }
         job.save();
         
-        //Run build, should be successful
-         job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
+        //Run build and check console for map values
+        Build build = job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
+        assertTrue(build.getConsole().contains("RAML0_L3 [origin = 0x008000, length = 0x002000, used = 00001a8f, unused = 00000571"));
          
         //Update memory-map-plugin
         jenkins.getPluginManager().installPlugin(resource("/memory_map_plugin/2.0.0.hpi").asFile());
@@ -86,7 +88,8 @@ public class MemoryMapPluginTest extends AbstractJUnitTest{
             assertEquals("RAML0_L3", jenkins.getElement(by.name("_.graphDataList")).getAttribute("value"));
         }
         
-        //Run build, should be successful
-         job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
+        //Run build and check console for map values
+        build = job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
+        assertTrue(build.getConsole().contains("RAML0_L3 [origin = 0x008000, length = 0x002000, used = 00001a8f, unused = 00000571"));
     }
 }
