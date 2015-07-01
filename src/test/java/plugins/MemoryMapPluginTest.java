@@ -23,18 +23,11 @@
  */
 package plugins;
 
-import java.io.File;
-import java.util.List;
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
-import org.jenkinsci.test.acceptance.junit.WithPlugins;
-import org.jenkinsci.test.acceptance.po.Build;
 import org.jenkinsci.test.acceptance.po.Build.Result;
 import org.jenkinsci.test.acceptance.po.FreeStyleJob;
 import static org.junit.Assert.assertEquals;
 import org.junit.Test;
-import org.openqa.selenium.By;
-import org.openqa.selenium.SearchContext;
-import org.openqa.selenium.WebElement;
 
 /**
  *
@@ -43,45 +36,55 @@ import org.openqa.selenium.WebElement;
 public class MemoryMapPluginTest extends AbstractJUnitTest{
     
     @Test
-    public void compatibilityTest(){
+    public void compatibilityTest() throws Exception{
         
         //install memory-map-plugin
-        File plugin = new File("/home/thi/Documents/Jenkins/1.0.2.hpi");
-        jenkins.getPluginManager().installPlugin(plugin);
-        jenkins.restart();
+        jenkins.getPluginManager().installPlugin(resource("/memory_map_plugin/1.0.2.hpi").asFile());
         
-        //Create a job
+        //Create a job and build to create workspace
         FreeStyleJob job = jenkins.jobs.create();
-        
-        //Create job workspace
         job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
               
         //Configure job
         job.configure();
-        jenkins.clickButton("Add post-build action");
-        jenkins.clickLink("Memory Map Publisher");
-        jenkins.fillIn("_.configurationFile", "28069_RAM_lnk.cmd");
-        jenkins.fillIn("_.wordSize", 8);
-        jenkins.check("_.showBytesOnGraph");
-        jenkins.find(by.name("_.scale")).sendKeys("Mega");
-        jenkins.find(by.path("/publisher/")).sendKeys("Texas");
-        jenkins.find(by.path("/publisher/repeatable-add")).click();
-        jenkins.waitFor(by.name("graph.config.graphCaption"));
-        jenkins.fillIn("graph.config.graphCaption", "TI graph");
-        jenkins.fillIn("graph.config.graphDataList", "RAML0_L3");
-        job.copyFile(new File("/home/thi/Documents/ti"));
-        jenkins.fillIn("mapFile", "TexasInstrumentsMapFile.txt");
+        {
+            jenkins.clickButton("Add post-build action");
+            jenkins.clickLink("Memory Map Publisher");
+            jenkins.fillIn("_.configurationFile", "ti_link.cmd");
+            jenkins.fillIn("_.wordSize", 8);
+            jenkins.check("_.showBytesOnGraph");
+            jenkins.find(by.name("_.scale")).sendKeys("Mega");
+            jenkins.find(by.path("/publisher/")).sendKeys("Texas");
+            jenkins.find(by.path("/publisher/repeatable-add")).click();
+            jenkins.waitFor(by.name("graph.config.graphCaption"));
+            jenkins.fillIn("graph.config.graphCaption", "TI graph");
+            jenkins.fillIn("graph.config.graphDataList", "RAML0_L3");
+            job.copyResource(resource("/memory_map_plugin/ti_map.txt"));
+            job.copyResource(resource("/memory_map_plugin/ti_link.cmd"));        
+            jenkins.fillIn("mapFile", "ti_map.txt");
+        }
         job.save();
         
         //Run build, should be successful
          job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
          
         //Update memory-map-plugin
-        plugin = new File("/home/thi/Documents/Jenkins/2.0.0.hpi");
-        jenkins.getPluginManager().installPlugin(plugin);
+        jenkins.getPluginManager().installPlugin(resource("/memory_map_plugin/2.0.0.hpi").asFile());
         jenkins.restart();
         
         //Check configuration is still fine
+        job.configure();
+        {
+            assertEquals("8", jenkins.getElement(by.name("_.wordSize")).getAttribute("value"));
+            assertEquals("true", jenkins.getElement(by.name("_.showBytesOnGraph")).getAttribute("value"));
+            assertEquals("Mega", jenkins.getElement(by.name("_.scale")).getAttribute("value"));
+            assertEquals("Default", jenkins.getElement(by.name("_.parserUniqueName")).getAttribute("value"));
+            assertEquals("", jenkins.getElement(by.name("_.parserTitle")).getAttribute("value"));
+            assertEquals("ti_link.cmd", jenkins.getElement(by.name("configurationFile")).getAttribute("value"));
+            assertEquals("ti_map.txt", jenkins.getElement(by.name("mapFile")).getAttribute("value"));
+            assertEquals("TI graph", jenkins.getElement(by.name("_.graphCaption")).getAttribute("value"));
+            assertEquals("RAML0_L3", jenkins.getElement(by.name("_.graphDataList")).getAttribute("value"));
+        }
         
         //Run build, should be successful
          job.startBuild().waitUntilFinished().shouldBe(Result.SUCCESS);
